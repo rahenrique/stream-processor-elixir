@@ -1,21 +1,34 @@
 # Log Stream Processor in Elixir
 
-**TODO: Add description**
+Stream Processor in Elixir, with Kafka and Opensearch
 
-## Installation
+## Running the project
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `log_stream` to your list of dependencies in `mix.exs`:
+There are various commands in a Makefile, to help running the project in the most straightforward way.
+All dependencies like Kafka and Opensearch are available in docker containers. To simply run all the containers, generate logs and see the processor in action, use the following commands:
 
-```elixir
-def deps do
-  [
-    {:log_stream, "~> 0.1.0"}
-  ]
-end
+1. Download and build all the dependencies 
+```bash
+make build
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/log_stream](https://hexdocs.pm/log_stream).
+2. Prepare a virtual environment for the log produces (it uses Python) 
+```bash
+cd python_producer && uv sync --frozen
+cd ..
+source python_producer/.venv/bin/activate
+```
 
+3. Produce some logs, and send them to Kafka
+Its possible to inspect the messages in Kafka using Kafdrop, at http://localhost:9000
+```bash
+make produce-logs
+```
+
+4. Run the stream processor container
+```bash
+make up
+```
+
+Its possible to inspect the processed logs in Opensearch, using Opensearch Dashboards, at http://localhost:8000
+After accessing for the first time, it may be necessary to set indexes in the dashboard.
