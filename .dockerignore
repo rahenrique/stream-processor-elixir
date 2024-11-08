@@ -1,0 +1,7 @@
+.dockerignore
+.git
+
+# Mix artifacts
+app/_build/
+app/deps/
+*.ez

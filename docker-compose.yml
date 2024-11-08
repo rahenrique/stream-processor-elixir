@@ -1,0 +1,150 @@
+version: '3.8'
+
+services:
+  stream_processor:
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: "1"
+    #       memory: 1024M
+    #     reservations:
+    #       cpus: "1"
+    #       memory: 1024M
+    build: 
+      dockerfile: ./docker/processor.dockerfile
+      context: .
+    container_name: stream_processor
+    environment:
+      MIX_ENV: dev
+    ports:
+      - "4000"
+    networks:
+      - stream_processor_network
+    volumes:
+      - ./app/config:/app/config
+      - ./app/lib:/app/lib
+      - ./app/test:/app/test
+      - ./app/.formatter.exs:/app/.formatter.exs
+      - ./app/mix.exs:/app/mix.exs
+      - ./app/mix.lock:/app/mix.lock
+    depends_on:
+      - zookeeper
+      - kafka
+      - opensearch-node1
+      - opensearch-dashboards
+  
+  # kafka services
+  zookeeper:
+    image: 'bitnami/zookeeper:3.7.0'
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - stream_processor_network
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    volumes:
+      - zookeeperdata:/bitnami/zookeeper
+  
+  kafka:
+    image: 'bitnami/kafka:2.8.0'
+    container_name: kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    networks:
+      - stream_processor_network
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CREATE_TOPICS="kafka_capstone_event_bus:1:1"
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_LISTENERS=CLIENT://:9092,EXTERNAL://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka:9092,EXTERNAL://localhost:9093
+      - KAFKA_INTER_BROKER_LISTENER_NAME=CLIENT
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    depends_on:
+      - zookeeper
+    volumes:
+      - kafkadata:/bitnami/kafka
+
+  kafdrop:
+    image: obsidiandynamics/kafdrop:3.31.0
+    container_name: kafdrop
+    ports:
+      - "9000:9000"
+    networks:
+      - stream_processor_network
+    environment:
+      KAFKA_BROKERCONNECT: "kafka:9092"
+      JVM_OPTS: "-Xms16M -Xmx48M -Xss180K -XX:-TieredCompilation -XX:+UseStringDeduplication -noverify"
+    depends_on:
+      - kafka
+
+  cmak:
+    image: ghcr.io/eshepelyuk/dckr/cmak-3.0.0.5:latest
+    container_name: cmak
+    restart: always
+    command:
+      - "-Dcmak.zkhosts=zookeeper:2181"
+      - "-DbasicAuthentication.enabled=true"
+      - "-DbasicAuthentication.username=username"
+      - "-DbasicAuthentication.password=password"
+    ports:
+      - "9005:9000"
+    networks:
+      - stream_processor_network
+    depends_on:
+      - kafka
+      - zookeeper
+
+  opensearch-node1:
+    image: opensearchproject/opensearch:latest
+    container_name: opensearch-node1
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # minimum and maximum Java heap size, recommend setting both to 50% of system RAM
+      - "DISABLE_INSTALL_DEMO_CONFIG=true" # disables execution of install_demo_configuration.sh bundled with security plugin, which installs demo certificates and security configurations to OpenSearch
+      - "DISABLE_SECURITY_PLUGIN=true" # disables security plugin entirely in OpenSearch by setting plugins.security.disabled: true in opensearch.yml
+      - "discovery.type=single-node" # disables bootstrap checks that are enabled when network.host is set to a non-loopback address
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
+        hard: 65536
+    volumes:
+      - opensearchdata1:/usr/share/opensearch/data
+    ports:
+      - 9200:9200
+      - 9601:9600 # required for Performance Analyzer
+    networks:
+      - stream_processor_network # All of the containers will join the same Docker bridge network
+
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:latest
+    container_name: opensearch-dashboards
+    ports:
+      - 8000:5601
+    environment:
+      - 'OPENSEARCH_HOSTS=["http://opensearch-node1:9200"]'
+      - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true" # disables security dashboards plugin in OpenSearch Dashboards
+    networks:
+      - stream_processor_network
+    depends_on:
+      - opensearch-node1
+
+networks:
+  stream_processor_network:
+    driver: bridge
+
+volumes:
+  zookeeperdata:
+    driver: local
+  kafkadata:
+    driver: local
+  opensearchdata1:
+    driver: local
