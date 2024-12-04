@@ -12,15 +12,14 @@ All dependencies like Kafka and Opensearch are available in docker containers. T
 make build
 ```
 
-2. Prepare a virtual environment for the log produces (it uses Python) 
+2. Prepare a virtual environment for the log producer (it uses Python) 
 ```bash
 cd python_producer && uv sync --frozen
 cd ..
 source python_producer/.venv/bin/activate
 ```
 
-3. Produce some logs, and send them to Kafka
-Its possible to inspect the messages in Kafka using Kafdrop, at http://localhost:9000
+3. Produce some logs, and send them to Kafka. You can inspect the messages using Kafdrop at http://localhost:9000
 ```bash
 make produce-logs
 ```
@@ -30,5 +29,4 @@ make produce-logs
 make up
 ```
 
-Its possible to inspect the processed logs in Opensearch, using Opensearch Dashboards, at http://localhost:8000
-After accessing for the first time, it may be necessary to set indexes in the dashboard.
+It's possible to inspect the processed logs in Opensearch, using Opensearch Dashboards at http://localhost:8000. When accessing OpenSearch for the first time, it may be necessary to set indexes before the messages appear in the dashboard.
